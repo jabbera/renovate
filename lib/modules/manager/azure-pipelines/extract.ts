@@ -8,15 +8,16 @@ import { AzurePipelinesTasksDatasource } from '../../datasource/azure-pipelines-
 import { GitTagsDatasource } from '../../datasource/git-tags';
 import { getDep } from '../dockerfile/extract';
 import type { PackageDependency, PackageFileContent } from '../types';
-import type {
+import {
   AzurePipelines,
   Container,
   Deploy,
   Deployment,
   Job,
+  Jobs,
   Repository,
   Step,
-} from './types';
+} from './schema';
 
 const AzurePipelinesTaskRegex = regEx(/^(?<name>[^@]+)@(?<version>.*)$/);
 
@@ -112,15 +113,19 @@ export function parseAzurePipelines(
   content: string,
   packageFile: string,
 ): AzurePipelines | null {
-  let pkg: AzurePipelines | null = null;
-  try {
-    pkg = load(content, { json: true }) as AzurePipelines;
-  } catch (err) /* istanbul ignore next */ {
-    logger.debug({ packageFile, err }, 'Error parsing azure-pipelines content');
+  const content_json = load(content, { json: true }) as string;
+  const res = AzurePipelines.safeParse({
+    content_json,
+    fileName: packageFile,
+  });
+  if (!res.success) {
+    logger.debug(
+      { packageFile, err: res.error },
+      'azure-pipelines: extract failed',
+    );
     return null;
   }
-
-  return pkg;
+  return res.data;
 }
 
 function extractSteps(
@@ -152,18 +157,21 @@ function extractDeploy(
   return deps;
 }
 
-function extractJobs(
-  jobs?: Job[] | Deployment[],
-): PackageDependency<Record<string, any>>[] {
+function extractJobs(jobs?: Jobs): PackageDependency<Record<string, any>>[] {
   const deps: PackageDependency<Record<string, any>>[] = [];
-
-  for (const { strategy } of coerceArray<Deployment>(jobs)) {
-    deps.push(...extractDeploy(strategy?.canary));
-    deps.push(...extractDeploy(strategy?.rolling));
-    deps.push(...extractDeploy(strategy?.runOnce));
+  if (!jobs) {
+    return deps;
   }
 
-  for (const job of coerceArray(jobs)) {
+  for (const jobOrDeployment of jobs) {
+    const deployment = jobOrDeployment as Deployment;
+    if (deployment.strategy) {
+      deps.push(...extractDeploy(deployment.strategy.canary));
+      deps.push(...extractDeploy(deployment.strategy.rolling));
+      deps.push(...extractDeploy(deployment.strategy.runOnce));
+    }
+
+    const job = jobOrDeployment as Job;
     deps.push(...extractJob(job));
   }
   return deps;
@@ -199,8 +207,8 @@ export function extractPackageFile(
     deps.push(...extractJobs(jobs));
   }
 
-  deps.push(...extractJobs(pkg.jobs));
-  deps.push(...extractSteps(pkg.steps));
+  deps.push(...extractJobs(pkg.jobs as Jobs));
+  deps.push(...extractSteps(pkg.steps as Step[])); // Type assertion
 
   if (!deps.length) {
     return null;
