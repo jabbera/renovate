@@ -1,4 +1,3 @@
-import { load } from 'js-yaml';
 import { GlobalConfig } from '../../../config/global';
 import { logger } from '../../../logger';
 import { coerceArray } from '../../../util/array';
@@ -8,15 +7,17 @@ import { AzurePipelinesTasksDatasource } from '../../datasource/azure-pipelines-
 import { GitTagsDatasource } from '../../datasource/git-tags';
 import { getDep } from '../dockerfile/extract';
 import type { PackageDependency, PackageFileContent } from '../types';
-import type {
+import {
   AzurePipelines,
+  AzurePipelinesYaml,
   Container,
   Deploy,
   Deployment,
   Job,
+  Jobs,
   Repository,
   Step,
-} from './types';
+} from './schema';
 
 const AzurePipelinesTaskRegex = regEx(/^(?<name>[^@]+)@(?<version>.*)$/);
 
@@ -112,15 +113,16 @@ export function parseAzurePipelines(
   content: string,
   packageFile: string,
 ): AzurePipelines | null {
-  let pkg: AzurePipelines | null = null;
-  try {
-    pkg = load(content, { json: true }) as AzurePipelines;
-  } catch (err) /* istanbul ignore next */ {
-    logger.debug({ packageFile, err }, 'Error parsing azure-pipelines content');
-    return null;
+  const res = AzurePipelinesYaml.safeParse(content);
+  if (res.success) {
+    return res.data;
+  } else {
+    logger.debug(
+      { err: res.error, packageFile },
+      'Error parsing pubspec lockfile.',
+    );
   }
-
-  return pkg;
+  return null;
 }
 
 function extractSteps(
@@ -152,18 +154,21 @@ function extractDeploy(
   return deps;
 }
 
-function extractJobs(
-  jobs?: Job[] | Deployment[],
-): PackageDependency<Record<string, any>>[] {
+function extractJobs(jobs?: Jobs): PackageDependency<Record<string, any>>[] {
   const deps: PackageDependency<Record<string, any>>[] = [];
-
-  for (const { strategy } of coerceArray<Deployment>(jobs)) {
-    deps.push(...extractDeploy(strategy?.canary));
-    deps.push(...extractDeploy(strategy?.rolling));
-    deps.push(...extractDeploy(strategy?.runOnce));
+  if (!jobs) {
+    return deps;
   }
 
-  for (const job of coerceArray(jobs)) {
+  for (const jobOrDeployment of jobs) {
+    const deployment = jobOrDeployment as Deployment;
+    if (deployment.strategy) {
+      deps.push(...extractDeploy(deployment.strategy.canary));
+      deps.push(...extractDeploy(deployment.strategy.rolling));
+      deps.push(...extractDeploy(deployment.strategy.runOnce));
+    }
+
+    const job = jobOrDeployment as Job;
     deps.push(...extractJob(job));
   }
   return deps;

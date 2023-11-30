@@ -15,17 +15,6 @@ const azurePipelines = Fixtures.get('azure-pipelines.yaml');
 const azurePipelinesNoDependency = Fixtures.get(
   'azure-pipelines-no-dependency.yaml',
 );
-const azurePipelinesOnFailure = Fixtures.get('azure-pipelines-on-failure.yaml');
-const azurePipelinesOnSuccess = Fixtures.get('azure-pipelines-on-success.yaml');
-const azurePipelinesPostroute = Fixtures.get('azure-pipelines-postroute.yaml');
-const azurePipelinesPredeploy = Fixtures.get('azure-pipelines-predeploy.yaml');
-const azurePipelinesRoute = Fixtures.get('azure-pipelines-route.yaml');
-const azurePipelinesRolling = Fixtures.get('azure-pipelines-rolling.yaml');
-const azurePipelinesCanary = Fixtures.get('azure-pipelines-canary.yaml');
-const azurePipelinesRunOnce = Fixtures.get('azure-pipelines-runonce.yaml');
-const azurePipelinesStages = Fixtures.get('azure-pipelines-stages.yaml');
-const azurePipelinesJobs = Fixtures.get('azure-pipelines-jobs.yaml');
-const azurePipelinesSteps = Fixtures.get('azure-pipelines-steps.yaml');
 
 describe('modules/manager/azure-pipelines/extract', () => {
   afterEach(() => {
@@ -66,12 +55,11 @@ describe('modules/manager/azure-pipelines/extract', () => {
       ).toBeNull();
     });
 
-    it('should return null when reference is not defined', () => {
+    it('should return null when reference is not defined specified', () => {
       expect(
         extractRepository({
           type: 'github',
           name: 'user/repo',
-          ref: null,
         }),
       ).toBeNull();
     });
@@ -146,10 +134,6 @@ describe('modules/manager/azure-pipelines/extract', () => {
         datasource: 'docker',
       });
     });
-
-    it('should return null if image field is missing', () => {
-      expect(extractContainer({ image: null })).toBeNull();
-    });
   });
 
   describe('extractAzurePipelinesTasks()', () => {
@@ -201,7 +185,16 @@ describe('modules/manager/azure-pipelines/extract', () => {
 
     it('should extract deployment jobs runonce', () => {
       const res = extractPackageFile(
-        azurePipelinesRunOnce,
+        `
+jobs:
+- deployment: deployment_one
+  strategy:
+    runOnce:
+      deploy:
+        steps:
+          - task: Bash@3
+            inputs:
+              script: 'echo Hello World'`,
         azurePipelinesFilename,
       );
       expect(res?.deps).toEqual([
@@ -215,7 +208,17 @@ describe('modules/manager/azure-pipelines/extract', () => {
 
     it('should extract deployment jobs on failure', () => {
       const res = extractPackageFile(
-        azurePipelinesOnFailure,
+        `
+jobs:
+- deployment: deployment_one
+  strategy:
+    runOnce:
+      on:
+        failure:
+          steps:
+            - task: Bash@3
+              inputs:
+                script: 'echo Hello World'`,
         azurePipelinesFilename,
       );
       expect(res?.deps).toEqual([
@@ -229,7 +232,17 @@ describe('modules/manager/azure-pipelines/extract', () => {
 
     it('should extract deployment jobs on success', () => {
       const res = extractPackageFile(
-        azurePipelinesOnSuccess,
+        `
+jobs:
+- deployment: deployment_one
+  strategy:
+    runOnce:
+      on:
+        success:
+          steps:
+            - task: Bash@3
+              inputs:
+                script: 'echo Hello World'`,
         azurePipelinesFilename,
       );
       expect(res?.deps).toEqual([
@@ -243,7 +256,16 @@ describe('modules/manager/azure-pipelines/extract', () => {
 
     it('should extract deployment jobs postroute', () => {
       const res = extractPackageFile(
-        azurePipelinesPostroute,
+        `
+jobs:
+- deployment: deployment_one
+  strategy:
+    runOnce:
+      postRouteTraffic:
+        steps:
+          - task: Bash@3
+            inputs:
+              script: 'echo Hello World'`,
         azurePipelinesFilename,
       );
       expect(res?.deps).toEqual([
@@ -257,7 +279,16 @@ describe('modules/manager/azure-pipelines/extract', () => {
 
     it('should extract deployment jobs predeploy', () => {
       const res = extractPackageFile(
-        azurePipelinesPredeploy,
+        `
+jobs:
+- deployment: deployment_one
+  strategy:
+    runOnce:
+      preDeploy:
+        steps:
+          - task: Bash@3
+            inputs:
+              script: 'echo Hello World'`,
         azurePipelinesFilename,
       );
       expect(res?.deps).toEqual([
@@ -271,7 +302,16 @@ describe('modules/manager/azure-pipelines/extract', () => {
 
     it('should extract deployment jobs route', () => {
       const res = extractPackageFile(
-        azurePipelinesRoute,
+        `
+jobs:
+- deployment: deployment_one
+  strategy:
+    runOnce:
+      routeTraffic:
+        steps:
+          - task: Bash@3
+            inputs:
+              script: 'echo Hello World'`,
         azurePipelinesFilename,
       );
       expect(res?.deps).toEqual([
@@ -285,7 +325,16 @@ describe('modules/manager/azure-pipelines/extract', () => {
 
     it('should extract deployment jobs rolling', () => {
       const res = extractPackageFile(
-        azurePipelinesRolling,
+        `
+jobs:
+- deployment: deployment_one
+  strategy:
+    rolling:
+      deploy:
+        steps:
+          - task: Bash@3
+            inputs:
+              script: 'echo Hello World'`,
         azurePipelinesFilename,
       );
       expect(res?.deps).toEqual([
@@ -299,7 +348,16 @@ describe('modules/manager/azure-pipelines/extract', () => {
 
     it('should extract deployment jobs canary', () => {
       const res = extractPackageFile(
-        azurePipelinesCanary,
+        `
+jobs:
+- deployment: deployment_one
+  strategy:
+    canary:
+      deploy:
+        steps:
+          - task: Bash@3
+            inputs:
+              script: 'echo Hello World'`,
         azurePipelinesFilename,
       );
       expect(res?.deps).toEqual([
@@ -313,7 +371,15 @@ describe('modules/manager/azure-pipelines/extract', () => {
 
     it('should extract stages', () => {
       const res = extractPackageFile(
-        azurePipelinesStages,
+        `
+stages:
+- stage: stage_one
+  jobs:
+    - job: job_one
+      steps:
+        - task: Bash@3
+          inputs:
+            script: 'echo Hello World'`,
         azurePipelinesFilename,
       );
       expect(res?.deps).toEqual([
@@ -327,7 +393,13 @@ describe('modules/manager/azure-pipelines/extract', () => {
 
     it('should extract jobs', () => {
       const res = extractPackageFile(
-        azurePipelinesJobs,
+        `
+jobs:
+  - job: job_one
+    steps:
+      - task: Bash@3
+        inputs:
+          script: 'echo Hello World'`,
         azurePipelinesFilename,
       );
       expect(res?.deps).toEqual([
@@ -341,7 +413,12 @@ describe('modules/manager/azure-pipelines/extract', () => {
 
     it('should extract steps', () => {
       const res = extractPackageFile(
-        azurePipelinesSteps,
+        `
+steps:
+- task: Bash@3
+  inputs:
+    script: 'echo Hello World'
+    `,
         azurePipelinesFilename,
       );
       expect(res?.deps).toEqual([
